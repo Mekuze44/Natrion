@@ -25,8 +25,6 @@ from typing import List, Dict, Optional, Any, Callable
 
 # Bibliotecas adicionais
 try:
-#    import cv2
-#    import numpy as np
     from tools import *
     from PIL import Image
     import mss
@@ -40,11 +38,14 @@ except ImportError as e:
 
 # ======================= CONFIGURAÇÕES =======================
 VERBOSE = True  # Coloque False para silenciar os logs de debug
+MODELO = "deepseek-r1:8b"
+URL_CLOUD = "https://ketonic-melodically-kerstin.ngrok-free.dev"
 
+client = ollama.Client(host=URL_CLOUD)
 
 # ======================= CLASSE PRINCIPAL =======================
 class Natrion:
-    def __init__(self, nome="Natrion", modelo="qwen2.5:1.5b"):
+    def __init__(self, nome="Natrion", modelo=MODELO):
         self.nome = nome
         self.modelo = modelo
         self.ativo = True
@@ -133,8 +134,8 @@ class Natrion:
         return [{"role": "system", "content": f"""Você é {self.nome}, um assistente inteligente rodando localmente no Arch Linux.
 Você é técnico, direto ao ponto(modo Arch).
 Especialista em programação, cibersegurança, eletrônica e hacking.
-Quando o usuário pedir algo prático, use as ferramentas (tools) disponíveis (clima, hora, terminal e pesquisa) para agir.
-Seja conciso."""}]
+Quando o usuário pedir algo prático, use as ferramentas (tools) disponíveis (clima, hora, terminal e pesquisa) para agir, Você NUNCA deve executar 'curl' para obter clima ou horário. Sempre use as funções get_current_weather e get_current_time.
+Seja conciso, preciso e humoristico."""}]
 
     def atualizar_contexto(self):
         self.cursor.execute("SELECT role, conteudo FROM conversas ORDER BY timestamp DESC LIMIT 10")
@@ -224,8 +225,7 @@ Seja conciso."""}]
     # ------------------------- IA COM TOOLS (QWEN) -------------------------
     def processar_ia(self, mensagem: str):
         print(f"\n🧠 Processando no {self.modelo}...")
-        
-        # 1. Prepara contexto com memória
+    
         memorias = self.buscar_conversas_relevantes(mensagem, limite=3)
         self.atualizar_contexto()
         
@@ -239,19 +239,16 @@ Seja conciso."""}]
             if VERBOSE:
                 print("🔄 Enviando para o modelo...")
 
-            # Chamada principal com suporte a Tools
-            response: ChatResponse = ollama.chat(
+            response: ChatResponse = client.chat(
                 model=self.modelo,
                 messages=self.contexto_conversa,
                 tools=TOOLS,
-                stream=False
-            )
+                stream=False           )
 
-            # Processa resposta ou tool calls
+            texto_resposta = ""
+
             if response.message.tool_calls:
-                # O modelo quer executar uma função
                 print(f"🔧 {self.nome} decidiu usar uma ferramenta.")
-                # Adiciona a resposta do modelo ao contexto
                 self.contexto_conversa.append(response.message)
                 
                 for tool in response.message.tool_calls:
@@ -260,10 +257,8 @@ Seja conciso."""}]
                     
                     if func_name in FUNCTION_MAP:
                         print(f"⚙️ Executando: {func_name}({func_args})")
-                        # Executa a função real
                         func_result = FUNCTION_MAP[func_name](**func_args)
                         
-                        # Adiciona o resultado da ferramenta ao contexto
                         self.contexto_conversa.append({
                             'role': 'tool',
                             'name': func_name,
@@ -272,7 +267,6 @@ Seja conciso."""}]
                     else:
                         print(f"❌ Função {func_name} não encontrada.")
                 
-                # Segunda chamada: modelo gera a resposta final com base no resultado da tool
                 final_response: ChatResponse = ollama.chat(
                     model=self.modelo,
                     messages=self.contexto_conversa,
@@ -280,22 +274,24 @@ Seja conciso."""}]
                 )
                 texto_resposta = final_response.message.content
             else:
-                # Resposta normal, sem tools
                 texto_resposta = response.message.content
 
-            # 3. Persistência e feedback
+            # ===== LIMPEZA DO TEXTO para o DeepSeek (remove tags de pensamento) =====
+            #
+            # if "" in texto_resposta:
+            #
+            #     texto_resposta = texto_resposta.split("")[0].strip()
+            
             self.salvar_conversa("user", mensagem)
             self.salvar_conversa("assistant", texto_resposta)
             self.dizer(texto_resposta)
 
-            # Limpeza de contexto
             if len(self.contexto_conversa) > 20:
                 self.contexto_conversa = [self.contexto_conversa[0]] + self.contexto_conversa[-20:]
 
         except Exception as e:
             print(f"❌ Erro fatal no processamento: {e}")
             self.dizer("Erro interno. Verifique se o Ollama está rodando.")
-
     def dizer(self, texto: str):
         print(f"\n🤖 {self.nome}: {texto}\n")
 
@@ -319,22 +315,9 @@ Seja conciso."""}]
 
 # ======================= MAIN =======================
 if __name__ == "__main__":
-    print("🚀 Iniciando Natrion 2.0 para Arch Linux...")
-    try:
-        ollama.list()
-        print("✅ Conexão com Ollama estabelecida.")
-    except Exception:
-        print("❌ Ollama não está rodando. Execute 'ollama serve' em outro terminal.")
-        sys.exit(1)
-
-    # Verifica modelo
-    MODELO_ESCOLHIDO = "qwen2.5:1.5b"
-    try:
-        ollama.show(MODELO_ESCOLHIDO)
-        print(f"✅ Modelo {MODELO_ESCOLHIDO} encontrado.")
-    except:
-        print(f"📦 Modelo {MODELO_ESCOLHIDO} não encontrado. Baixando...")
-        ollama.pull(MODELO_ESCOLHIDO)
+    print("🚀 Iniciando Natrion 2.0 para Arch Linux (versão CLOUD)...")
+    MODELO_ESCOLHIDO = "deepseek-r1:8b"
+    print(f"✅ Conectando ao modelo {MODELO_ESCOLHIDO} em {URL_CLOUD}")
     
     assistente = Natrion(modelo=MODELO_ESCOLHIDO)
     assistente.executar()
