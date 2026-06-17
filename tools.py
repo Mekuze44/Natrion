@@ -1,4 +1,13 @@
-
+def listar_ferramentas() -> str:
+    """Retorna a lista de ferramentas disponíveis (dinâmica)"""
+    ferramentas = []
+    for tool in TOOLS:
+        ferramentas.append({
+            "name": tool["function"]["name"],
+            "description": tool["function"]["description"]
+        })
+    import json
+    return json.dumps(ferramentas, indent=2, ensure_ascii=False)
 
 def search_web(query: str) -> str:
     """
@@ -16,16 +25,19 @@ def search_web(query: str) -> str:
         return "Biblioteca duckduckgo-search não instalada. Pip install duckduckgo-search"
     except Exception as e:
         return f"Erro na busca: {e}"
+
 def get_current_weather(location: str) -> str:
     try:
+        import requests
         url = f"https://wttr.in/{location}?format=%t+%C"
-        response = request.get(url, timeout=5)
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
             return f"Clima em {location}: {response.text.strip()}"
     except Exception as e:
         return f"erro ao consultar clima: {e}"
 
 def get_current_time() -> str:
+    import datetime
     """Retorna a data e hora atuais."""
     now = datetime.datetime.now()
     return now.strftime("%Y-%m-%d %H:%M:%S")
@@ -33,6 +45,7 @@ def get_current_time() -> str:
 def run_terminal_command(command: str) -> str:
     """(CUIDADO) Executa comando no terminal do Linux (Arch)."""
     try:
+        import subprocess
         result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
         return f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     except subprocess.TimeoutExpired:
@@ -46,7 +59,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_current_weather",
-            "description": "sempre use esta ferramenta para responder perguntas sobre clima, temperatura, previsão do tempo ou tempo em qualquer localização. Absolutamente nunca invente o clima.",
+            "description": "Use esta ferramenta para responder perguntas sobre clima, temperatura, previsão do tempo ou tempo em qualquer localização. Absolutamente nunca invente o clima.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -101,9 +114,20 @@ TOOLS = [
                     }
                 },
                 "required": ["query"]
-            }
-        }
-    }
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_ferramentas",
+            "description": "Lista todas as ferramentas disponíveis e suas descrições, use quando precisar saber suas ferramentas especificas",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
 ]
 
 # Mapeamento nome_da_funcao -> função real
@@ -112,4 +136,5 @@ FUNCTIONS_MAP = {
     "get_current_time": get_current_time,
     "search_web": search_web,
     "run_terminal_command": run_terminal_command,
+    "listar_ferramentas": listar_ferramentas,
 }

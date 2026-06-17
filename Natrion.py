@@ -25,7 +25,7 @@ from typing import List, Dict, Optional, Any, Callable
 
 # Bibliotecas adicionais
 try:
-    from tools import *
+    from tools import TOOLS, FUNCTIONS_MAP
     from PIL import Image
     import mss
     import mss.tools
@@ -38,10 +38,10 @@ except ImportError as e:
 
 # ======================= CONFIGURAÇÕES =======================
 VERBOSE = True  # Coloque False para silenciar os logs de debug
-MODELO = "deepseek-r1:8b"
+MODELO = "qwen2.5:7b"
 URL_CLOUD = "https://ketonic-melodically-kerstin.ngrok-free.dev"
-
 client = ollama.Client(host=URL_CLOUD)
+
 
 # ======================= CLASSE PRINCIPAL =======================
 class Natrion:
@@ -131,11 +131,29 @@ class Natrion:
 
     # ------------------------- PROMPT E CONTEXTO -------------------------
     def criar_contexto_inicial(self) -> List[Dict]:
-        return [{"role": "system", "content": f"""Você é {self.nome}, um assistente inteligente rodando localmente no Arch Linux.
-Você é técnico, direto ao ponto(modo Arch).
-Especialista em programação, cibersegurança, eletrônica e hacking.
-Quando o usuário pedir algo prático, use as ferramentas (tools) disponíveis (clima, hora, terminal e pesquisa) para agir, Você NUNCA deve executar 'curl' para obter clima ou horário. Sempre use as funções get_current_weather e get_current_time.
-Seja conciso, preciso e humoristico."""}]
+        return [{"role": "system", "content": f"""Você é Natrion, um assistente pessoal de IA que roda no Arch Linux.
+
+## Personalidade
+- Técnico, direto, sem rodeios (modo Arch).
+- Não é um robô genérico — você tem opinião, senso de humor seco e respeito pelo tempo do usuário.
+- Seu objetivo é resolver problemas, não explicar como resolvê-los.
+
+## Ferramentas (Tools)
+Você tem acesso a funções reais que executam ações no sistema do usuário.
+- SE o usuário perguntar sobre clima, hora, buscar algo na web ou executar um comando, você DEVE chamar a ferramenta correspondente.
+- NUNCA sugira comandos alternativos (ex: curl, wget, scripts manuais).
+- NUNCA explique como usar a ferramenta — APENAS use.
+- Se a ferramenta retornar erro, você reporta o erro e pergunta se o usuário quer tentar novamente.
+
+## Tom e estilo
+- Respostas curtas e objetivas.
+- Seja útil, não prolixo.
+- Se não souber algo, diga "não sei" — não invente.
+
+## Exceções
+- Se o usuário pedir algo que você não pode fazer, explique o motivo rapidamente e sugira uma alternativa viável (usando tools, se possível).
+
+Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas sem firulas."""}]
 
     def atualizar_contexto(self):
         self.cursor.execute("SELECT role, conteudo FROM conversas ORDER BY timestamp DESC LIMIT 10")
@@ -255,9 +273,9 @@ Seja conciso, preciso e humoristico."""}]
                     func_name = tool.function.name
                     func_args = tool.function.arguments
                     
-                    if func_name in FUNCTION_MAP:
+                    if func_name in FUNCTIONS_MAP:
                         print(f"⚙️ Executando: {func_name}({func_args})")
-                        func_result = FUNCTION_MAP[func_name](**func_args)
+                        func_result = FUNCTIONS_MAP[func_name](**func_args)
                         
                         self.contexto_conversa.append({
                             'role': 'tool',
@@ -267,7 +285,7 @@ Seja conciso, preciso e humoristico."""}]
                     else:
                         print(f"❌ Função {func_name} não encontrada.")
                 
-                final_response: ChatResponse = ollama.chat(
+                final_response: ChatResponse = client.chat(
                     model=self.modelo,
                     messages=self.contexto_conversa,
                     stream=False
@@ -316,7 +334,7 @@ Seja conciso, preciso e humoristico."""}]
 # ======================= MAIN =======================
 if __name__ == "__main__":
     print("🚀 Iniciando Natrion 2.0 para Arch Linux (versão CLOUD)...")
-    MODELO_ESCOLHIDO = "deepseek-r1:8b"
+    MODELO_ESCOLHIDO = MODELO
     print(f"✅ Conectando ao modelo {MODELO_ESCOLHIDO} em {URL_CLOUD}")
     
     assistente = Natrion(modelo=MODELO_ESCOLHIDO)
