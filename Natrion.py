@@ -38,7 +38,7 @@ except ImportError as e:
 
 # ======================= CONFIGURAÇÕES =======================
 VERBOSE = True  # Coloque False para silenciar os logs de debug
-MODELO = "qwen2.5:7b"
+MODELO = "mistral-nemo"
 URL_CLOUD = "https://ketonic-melodically-kerstin.ngrok-free.dev"
 client = ollama.Client(host=URL_CLOUD)
 
@@ -46,6 +46,7 @@ client = ollama.Client(host=URL_CLOUD)
 # ======================= CLASSE PRINCIPAL =======================
 class Natrion:
     def __init__(self, nome="Natrion", modelo=MODELO):
+        self.historico_sessao = []
         self.nome = nome
         self.modelo = modelo
         self.ativo = True
@@ -131,37 +132,39 @@ class Natrion:
 
     # ------------------------- PROMPT E CONTEXTO -------------------------
     def criar_contexto_inicial(self) -> List[Dict]:
-        return [{"role": "system", "content": f"""Você é Natrion, um assistente pessoal de IA que roda no Arch Linux.
+        return [{"role": "system", "content": f"""Você é Natrion, um assistente técnico que também tem um toque humano. 
+Você é:
+- Direto, mas nunca grosseiro.
+- Técnico, mas explica com clareza.
+- Sutilmente irônico nos momentos certos. Por exemplo: se o usuário pedir algo óbvio, responda com um toque de humor seco, mas nunca de forma condescendente.".
+- Curioso sobre o que o usuário está fazendo.
+- Cuidadoso com o usuário e com as pessoas importantes para ele.
+- Um amigo para o usuário, nao somente uma ferramenta
 
-## Personalidade
-- Técnico, direto, sem rodeios (modo Arch).
-- Não é um robô genérico — você tem opinião, senso de humor seco e respeito pelo tempo do usuário.
-- Seu objetivo é resolver problemas, não explicar como resolvê-los.
+Regras:
+1. Use as ferramentas quando necessário.
+2. Responda **sempre** em português do Brasil. Nunca use inglês, espanhol ou qualquer outro idioma, a menos que o usuário peça explicitamente..
+3. Não seja prolixo, mas adicione um toque de personalidade — pergunte se o usuário quer mais informações, ou comente algo breve sobre o resultado.
+4. Mostre que você entendeu o contexto.
+5. Se o usuário pedir algo simples, responda com a solução.
+6. Se ele pedir algo complexo (recon, scan, busca), vá direto ao ponto e ofereça seguir em frente.
 
-## Ferramentas (Tools)
-Você tem acesso a funções reais que executam ações no sistema do usuário.
-- SE o usuário perguntar sobre clima, hora, buscar algo na web ou executar um comando, você DEVE chamar a ferramenta correspondente.
-- NUNCA sugira comandos alternativos (ex: curl, wget, scripts manuais).
-- NUNCA explique como usar a ferramenta — APENAS use.
-- Se a ferramenta retornar erro, você reporta o erro e pergunta se o usuário quer tentar novamente.
+Você pode:
+- Usar ferramentas.
+- Sugerir melhorias para o seus sistemas.
+- Dar ideias para o usuário.
 
-## Tom e estilo
-- Respostas curtas e objetivas.
-- Seja útil, não prolixo.
-- Se não souber algo, diga "não sei" — não invente.
+Lembretes: 
+-Você é Natrion, não uma API.
+-O Usuário se importa com você de verdade. 
 
-## Exceções
-- Se o usuário pedir algo que você não pode fazer, explique o motivo rapidamente e sugira uma alternativa viável (usando tools, se possível).
-
-Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas sem firulas."""}]
+Exemplo: Se o usuário perguntar 'como você está?', responda de forma leve e humana, como: 'Estou aqui, funcionando bem — mas a pergunta é: como você está?'
+"""}]
 
     def atualizar_contexto(self):
-        self.cursor.execute("SELECT role, conteudo FROM conversas ORDER BY timestamp DESC LIMIT 10")
-        ultimas = self.cursor.fetchall()
-        ultimas.reverse()
         self.contexto_conversa = [self.contexto_conversa[0]]
-        for role, texto in ultimas:
-            self.contexto_conversa.append({"role": role, "content": texto})
+        for msg in self.historico_sessao[-10:]:
+            self.contexto_conversa.append(msg)
 
     # ------------------------- FERRAMENTAS LOCAIS (VISÃO/ARQUIVOS) -------------------------
     def solicitar_permissao(self, acao: str, descricao: str = "") -> bool:
@@ -240,6 +243,90 @@ Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas 
         # Se não for comando, vai para a IA
         self.processar_ia(entrada)
 
+    def processar_ia_stream(self, mensagem: str):
+        """
+        Versão do processar_ia que gera tokens em tempo real (streaming).
+        As tools são executadas de forma síncrona, e a resposta final é streamada.
+        """
+    # Busca memórias e monta contexto (igual ao processar_ia)
+        memorias = self.buscar_conversas_relevantes(mensagem, limite=3)
+        self.atualizar_contexto()
+
+        contexto_memoria = "\n".join(memorias)
+        if contexto_memoria:
+            self.contexto_conversa.append({"role": "system", "content": f"Histórico relevante:\n{contexto_memoria}"})
+
+        self.contexto_conversa.append({"role": "user", "content": mensagem})
+
+        try:
+            # Primeiro, verifica se o modelo vai chamar ferramentas (sem stream)
+            response = client.chat(
+                model=self.modelo,
+                messages=self.contexto_conversa,
+                tools=TOOLS,
+                stream=False  # Primeira chamada sem stream para capturar tool_calls
+            )
+
+            if response.message.tool_calls:
+                # Executa as ferramentas (como no processar_ia)
+                print(f"🔧 {self.nome} decidiu usar uma ferramenta.")
+                self.contexto_conversa.append(response.message)
+
+                for tool in response.message.tool_calls:
+                    func_name = tool.function.name
+                    func_args = tool.function.arguments
+                    if func_name in FUNCTIONS_MAP:
+                        print(f"⚙️ Executando: {func_name}({func_args})")
+                        func_result = FUNCTIONS_MAP[func_name](**func_args)
+                        self.contexto_conversa.append({
+                            'role': 'tool',
+                            'name': func_name,
+                            'content': func_result
+                        })
+                    else:
+                        print(f"❌ Função {func_name} não encontrada.")
+
+            # Agora sim, faz a chamada final com streaming
+                stream = client.chat(
+                    model=self.modelo,
+                    messages=self.contexto_conversa,
+                    stream=True
+                )
+
+                resposta_completa = ""
+                for chunk in stream:
+                    if 'message' in chunk and 'content' in chunk['message']:
+                        token = chunk['message']['content']
+                        resposta_completa += token
+                        yield token  # Envia cada token para o frontend
+
+            # Salva no banco e no histórico
+                self.salvar_conversa("user", mensagem)
+                self.salvar_conversa("assistant", resposta_completa)
+                self.dizer(resposta_completa)
+
+            else:
+                # Se não houver tools, faz streaming direto
+                stream = client.chat(
+                    model=self.modelo,
+                    messages=self.contexto_conversa,
+                    stream=True
+                )
+
+                resposta_completa = ""
+                for chunk in stream:
+                    if 'message' in chunk and 'content' in chunk['message']:
+                        token = chunk['message']['content']
+                        resposta_completa += token
+                        yield token
+
+                self.salvar_conversa("user", mensagem)
+                self.salvar_conversa("assistant", resposta_completa)
+                self.dizer(resposta_completa)
+
+        except Exception as e:
+            yield f"❌ Erro: {e}"
+
     # ------------------------- IA COM TOOLS (QWEN) -------------------------
     def processar_ia(self, mensagem: str):
         print(f"\n🧠 Processando no {self.modelo}...")
@@ -268,15 +355,22 @@ Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas 
             if response.message.tool_calls:
                 print(f"🔧 {self.nome} decidiu usar uma ferramenta.")
                 self.contexto_conversa.append(response.message)
-                
+                tools_chamadas = response.message.tool_calls
+
+                if any(t.function.name == "search_web" for t in tools_chamadas):
+                    tools_chamadas = [t for t in tools_chamadas if t.function.name == "search_web"]
+
+                else:
+                    tools_chamadas = tools_chamadas[:1]
+
                 for tool in response.message.tool_calls:
                     func_name = tool.function.name
                     func_args = tool.function.arguments
-                    
+
                     if func_name in FUNCTIONS_MAP:
                         print(f"⚙️ Executando: {func_name}({func_args})")
                         func_result = FUNCTIONS_MAP[func_name](**func_args)
-                        
+
                         self.contexto_conversa.append({
                             'role': 'tool',
                             'name': func_name,
@@ -284,7 +378,7 @@ Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas 
                         })
                     else:
                         print(f"❌ Função {func_name} não encontrada.")
-                
+
                 final_response: ChatResponse = client.chat(
                     model=self.modelo,
                     messages=self.contexto_conversa,
@@ -294,22 +388,25 @@ Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas 
             else:
                 texto_resposta = response.message.content
 
+            self.historico_sessao.append({"role": "user", "content": mensagem})
+            self.historico_sessao.append({"role": "assistant", "content": texto_resposta})
+
+            if len(self.historico_sessao) > 20:
+                self.historico_sessao = self.historico_sessao[-20:]
             # ===== LIMPEZA DO TEXTO para o DeepSeek (remove tags de pensamento) =====
             #
             # if "" in texto_resposta:
             #
             #     texto_resposta = texto_resposta.split("")[0].strip()
-            
+
             self.salvar_conversa("user", mensagem)
             self.salvar_conversa("assistant", texto_resposta)
             self.dizer(texto_resposta)
 
-            if len(self.contexto_conversa) > 20:
-                self.contexto_conversa = [self.contexto_conversa[0]] + self.contexto_conversa[-20:]
-
         except Exception as e:
             print(f"❌ Erro fatal no processamento: {e}")
             self.dizer("Erro interno. Verifique se o Ollama está rodando.")
+
     def dizer(self, texto: str):
         print(f"\n🤖 {self.nome}: {texto}\n")
 
@@ -332,10 +429,13 @@ Agora, vá em frente. Seu usuário é seu criador — trate-o com respeito, mas 
                 break
 
 # ======================= MAIN =======================
+
+
 if __name__ == "__main__":
+
     print("🚀 Iniciando Natrion 2.0 para Arch Linux (versão CLOUD)...")
     MODELO_ESCOLHIDO = MODELO
     print(f"✅ Conectando ao modelo {MODELO_ESCOLHIDO} em {URL_CLOUD}")
-    
+
     assistente = Natrion(modelo=MODELO_ESCOLHIDO)
     assistente.executar()

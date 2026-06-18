@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Natrion - Assistente</title>
+    <style>
+        /* Reset e base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: #11111b;
+            color: #cdd6f4;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            height: 90vh;
+            background: #1e1e2e;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #313244;
+        }
+
+        /* Header */
+        .header {
+            padding: 20px 24px;
+            background: #181825;
+            border-bottom: 1px solid #313244;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .header .icon {
+            font-size: 28px;
+        }
+
+        .header .title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #cba6f7;
+            letter-spacing: -0.5px;
+        }
+
+        .header .status {
+            margin-left: auto;
+            font-size: 13px;
+            color: #a6e3a1;
+            background: #1e3b2a;
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid #49b97d;
+        }
+
+        /* Chat */
+        .chat {
+            flex: 1;
+            padding: 20px 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: #1e1e2e;
+        }
+
+        .chat .message {
+            max-width: 80%;
+            padding: 12px 18px;
+            border-radius: 16px;
+            line-height: 1.6;
+            animation: fadeIn 0.3s ease;
+            word-wrap: break-word;
+        }
+
+        .chat .user {
+            align-self: flex-end;
+            background: #45475a;
+            color: #cdd6f4;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat .natrion {
+            align-self: flex-start;
+            background: #313244;
+            color: #cdd6f4;
+            border-bottom-left-radius: 4px;
+            border-left: 3px solid #cba6f7;
+        }
+
+        .chat .natrion .thinking {
+            color: #89b4fa;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .chat .typing-indicator {
+            align-self: flex-start;
+            display: none;
+            background: #313244;
+            padding: 12px 18px;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            border-left: 3px solid #89b4fa;
+            font-size: 14px;
+            color: #a6adc8;
+        }
+
+        .chat .typing-indicator span {
+            animation: blink 1.4s infinite;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes blink {
+            0% { opacity: 0.2; }
+            50% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+
+        /* Input */
+        .input-area {
+            padding: 16px 24px 24px;
+            background: #181825;
+            border-top: 1px solid #313244;
+            display: flex;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 18px;
+            background: #313244;
+            border: 1px solid #45475a;
+            border-radius: 40px;
+            color: #cdd6f4;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+            font-family: inherit;
+        }
+
+        .input-area input:focus {
+            border-color: #cba6f7;
+        }
+
+        .input-area input::placeholder {
+            color: #6c7086;
+        }
+
+        .input-area button {
+            padding: 12px 24px;
+            background: #cba6f7;
+            border: none;
+            border-radius: 40px;
+            color: #11111b;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            font-family: inherit;
+        }
+
+        .input-area button:hover {
+            background: #b48bdc;
+        }
+
+        .input-area button:active {
+            transform: scale(0.97);
+        }
+
+        .input-area button:disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* Scrollbar */
+        .chat::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .chat::-webkit-scrollbar-track {
+            background: #1e1e2e;
+        }
+
+        .chat::-webkit-scrollbar-thumb {
+            background: #45475a;
+            border-radius: 4px;
+        }
+
+        /* Responsivo */
+        @media (max-width: 600px) {
+            body { padding: 8px; }
+            .container { height: 95vh; border-radius: 16px; }
+            .header { padding: 14px 16px; }
+            .header .title { font-size: 17px; }
+            .chat { padding: 16px; }
+            .chat .message { max-width: 90%; }
+            .input-area { padding: 12px 16px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <span class="icon">🧠</span>
+        <span class="title">Natrion</span>
+        <span class="status">● online</span>
+    </div>
+
+    <div class="chat" id="chat">
+        <div class="message natrion">
+            Olá, sou o Natrion. Pergunte o que quiser — posso ver clima, hora, buscar na web, executar comandos e fazer reconhecimento de sites.
+        </div>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="prompt" placeholder="Digite sua mensagem..." autofocus>
+        <button id="sendBtn">Enviar</button>
+    </div>
+</div>
+
+<script>
+    const chatDiv = document.getElementById('chat');
+    const promptInput = document.getElementById('prompt');
+    const sendBtn = document.getElementById('sendBtn');
+    let eventSource = null;
+    let currentNatrionDiv = null;
+    let respostaCompleta = '';
+
+    function criarMensagemUser(texto) {
+        const div = document.createElement('div');
+        div.className = 'message user';
+        div.textContent = texto;
+        chatDiv.appendChild(div);
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    function criarMensagemNatrion() {
+        const div = document.createElement('div');
+        div.className = 'message natrion';
+        div.innerHTML = '<span style="color:#89b4fa;">Natrion</span> ';
+        chatDiv.appendChild(div);
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+        return div;
+    }
+
+    function mostrarIndicadorDigitar() {
+        const div = document.createElement('div');
+        div.className = 'typing-indicator';
+        div.id = 'typing-indicator';
+        div.innerHTML = '<span>●</span><span>●</span><span>●</span>';
+        chatDiv.appendChild(div);
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+        return div;
+    }
+
+    function removerIndicador() {
+        const el = document.getElementById('typing-indicator');
+        if (el) el.remove();
+    }
+
+    function enviar() {
+        const prompt = promptInput.value.trim();
+        if (!prompt) return;
+
+        // Desabilita o botão durante o envio
+        sendBtn.disabled = true;
+        promptInput.disabled = true;
+
+        // Fecha qualquer conexão anterior
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+
+        // Mostra mensagem do usuário
+        criarMensagemUser(prompt);
+        promptInput.value = '';
+        promptInput.focus();
+
+        // Mostra indicador de digitação
+        const typing = mostrarIndicadorDigitar();
+
+        // Cria o container da resposta do Natrion
+        const natrionDiv = document.createElement('div');
+        natrionDiv.className = 'message natrion';
+        natrionDiv.innerHTML = '<span style="color:#89b4fa;">Natrion</span> ';
+        chatDiv.appendChild(natrionDiv);
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+
+        let respostaParcial = '';
+
+        // Abre a conexão SSE
+        eventSource = new EventSource(`/chat/stream?prompt=${encodeURIComponent(prompt)}`);
+
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.token) {
+                    // Remove o indicador se ainda estiver lá
+                    if (document.getElementById('typing-indicator')) {
+                        removerIndicador();
+                    }
+                    respostaParcial += data.token;
+                    natrionDiv.innerHTML = `<span style="color:#89b4fa;">Natrion</span> ${respostaParcial}`;
+                    chatDiv.scrollTop = chatDiv.scrollHeight;
+                } else if (data.error) {
+                    removerIndicador();
+                    natrionDiv.innerHTML += `<span style="color:#f38ba8;"> ❌ ${data.error}</span>`;
+                }
+            } catch (e) {
+                // ignora erros de parse
+            }
+        };
+
+        eventSource.onerror = function() {
+            removerIndicador();
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            sendBtn.disabled = false;
+            promptInput.disabled = false;
+            promptInput.focus();
+        };
+
+        // Fecha automaticamente após 60s (segurança)
+        setTimeout(() => {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                sendBtn.disabled = false;
+                promptInput.disabled = false;
+                promptInput.focus();
+            }
+        }, 60000);
+    }
+
+    // Envia com Enter
+    promptInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            enviar();
+        }
+    });
+
+    // Se a conexão for perdida, reabilita os inputs
+    window.addEventListener('beforeunload', function() {
+        if (eventSource) {
+            eventSource.close();
+        }
+    });
+
+    // Focus inicial
+    promptInput.focus();
+</script>
+
+</body>
+</html>
